@@ -2535,7 +2535,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT/oYPSF32mQ="
 									},
-									"name": "Gnd"
+									"name": "Gnd",
+									"type": ""
 								}
 							]
 						},
@@ -2553,7 +2554,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+mgQxiITvA="
 									},
-									"name": "Ar"
+									"name": "Ar",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -2561,7 +2563,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+mgQxiITvA="
 									},
-									"name": "nsteps"
+									"name": "nsteps",
+									"type": ""
 								}
 							]
 						},
@@ -2579,7 +2582,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+m/oxjZADw="
 									},
-									"name": "As"
+									"name": "As",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -2922,7 +2926,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT/uuOyRC5ug="
 									},
-									"name": "Gndi"
+									"name": "Gndi",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -2949,7 +2954,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+Pw+RY1olY="
 									},
-									"name": "Gndi"
+									"name": "Gndi",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -2957,7 +2963,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+Pw+RY1olY="
 									},
-									"name": "sites"
+									"name": "sites",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -2965,7 +2972,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+Pw+RY1olY="
 									},
-									"name": "nsteps"
+									"name": "nsteps",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -2992,7 +3000,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+RsFhaGVNg="
 									},
-									"name": "Gndi"
+									"name": "Gndi",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -3000,7 +3009,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+RsFhaGVNg="
 									},
-									"name": "sites"
+									"name": "sites",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -3008,7 +3018,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+RsFhaGVNg="
 									},
-									"name": "signal"
+									"name": "signal",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -3035,7 +3046,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+PGOBWSzpg="
 									},
-									"name": "sites"
+									"name": "sites",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -3043,7 +3055,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+PGOBWSzpg="
 									},
-									"name": "signal"
+									"name": "signal",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -5515,7 +5528,7 @@
 											"left": 427,
 											"top": 129,
 											"width": 14,
-											"height": 384
+											"height": 376
 										}
 									],
 									"font": "Arial;13;0",
@@ -7165,7 +7178,8 @@
 					"_parent": {
 						"$ref": "AAAAAAFwVm3bxxwdT94="
 					},
-					"name": "Role2"
+					"name": "Role2",
+					"type": ""
 				},
 				{
 					"_type": "UMLAttribute",
@@ -7173,7 +7187,8 @@
 					"_parent": {
 						"$ref": "AAAAAAFwVm3bxxwdT94="
 					},
-					"name": "Role3"
+					"name": "Role3",
+					"type": ""
 				},
 				{
 					"_type": "UMLAttribute",
@@ -7181,7 +7196,8 @@
 					"_parent": {
 						"$ref": "AAAAAAFwVm3bxxwdT94="
 					},
-					"name": "Role4"
+					"name": "Role4",
+					"type": ""
 				},
 				{
 					"_type": "UMLAttribute",
@@ -7189,7 +7205,8 @@
 					"_parent": {
 						"$ref": "AAAAAAFwVm3bxxwdT94="
 					},
-					"name": "Role5"
+					"name": "Role5",
+					"type": ""
 				},
 				{
 					"_type": "UMLAttribute",
