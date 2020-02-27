@@ -1,10 +1,12 @@
+import os
+import torch
+from torch.utils import model_zoo
+
 
 class NeuronalModel:
     def __init__(self):
         self.Gn = None
-
-    def __init__(self, ):
-        pass
+        # TODO load cornet model - need to be done in linux: pip install git+https://github.com/dicarlolab/CORnet
 
     def build(self, Gndi):
         pass
@@ -21,3 +23,6 @@ class NeuronalModel:
     def reset(self, ):
         pass
 
+
+if __name__ == '__main__':
+    model = NeuronalModel()
