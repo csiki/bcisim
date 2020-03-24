@@ -11,11 +11,13 @@ import neur.cornet_v as cornet
 
 
 class NeuronalModel:
-    def __init__(self, input_dim):  # input_dim includes chan
+    def __init__(self, input_dim, hwdev='cuda'):  # input_dim includes chan
+        self.hwdev = hwdev
         self.cornet = None
         self.recordings = None
         self.recordings_i = None
         self.stims = None
+        self.ndevsites = None
         self.layers = ('V1', 'V2', 'V4', 'IT')
         self.states = {l: [] for l in self.layers}  # look out, refs to the arrays must be kept constant
 
@@ -59,13 +61,13 @@ class NeuronalModel:
         return Gndi
 
     def record(self, Gndi, sites):
-        # sites: nsteps x batch x nsites, where nsites is the number of sites that can be recorded simultaneously
+        # sites: nsteps x batch x ndevsites, where ndevsites is the number of neur sites the device have access to
         # generate recordings_i: nsteps x {layers_i: (batch_i, site_i, slice(batch_i, chan_i, h_i, w_i))}
         #   batch_i is an array of indices, helps rebuild the recorded signals into nsteps x batch x nsites
         #   same for site_i, indicates the index at which the recording was commanded by the control model
         self.recordings = []  # contains the actual recordings, filled in sim()
         self.recordings_i = []  # helper array, prepared for easy layer slicing in sim()
-        _, _, self.rec_nsites = sites.shape
+        _, _, self.ndevsites = sites.shape
 
         for step in sites:
             self.recordings_i.append({})
@@ -76,8 +78,6 @@ class NeuronalModel:
                     # rec_i indices the layer dim-by-dim, each dim is prepared to be sliced with an array
                     rec_i = np.concatenate([[batch_i], np.stack(ptrs[batch_i, site_i, 1]).transpose()])
                     self.recordings_i[-1][layer] = [batch_i, site_i, rec_i]
-
-        return Gndi
 
     def stim(self, Gndi, sites, signals):
         # sites: nsteps x batch x nsites, where nsites is the number of sites that can be stimulated simultaneously
@@ -91,7 +91,7 @@ class NeuronalModel:
             ptrs = self.site_mapping[step_site.flatten()].reshape(step_site.shape + (-1,))  # np array of pointers to the neurons
             for layer in self.layers:
                 batch_i, site_i = np.where(ptrs[:, :, 0] == layer)
-                stim_vec = torch.zeros((batch_size,) + self.layer_dims[layer]).to('cuda')
+                stim_vec = torch.zeros((batch_size,) + self.layer_dims[layer], device=self.hwdev)
 
                 if len(batch_i) > 0:
                     # stim_i indexes stim_vec like:
@@ -99,9 +99,7 @@ class NeuronalModel:
                     stim_i = np.concatenate([[batch_i], np.stack(ptrs[batch_i, site_i, 1]).transpose()])
                     stim_vec[stim_i] = step_signal[batch_i, site_i]
 
-                self.stims[-1][layer] = stim_vec.to('cuda')
-
-        return Gndi
+                self.stims[-1][layer] = stim_vec.to(self.hwdev)
 
     def sim(self, inputs, nsteps):
         outputs = []
@@ -114,7 +112,7 @@ class NeuronalModel:
             outputs.append(out)
 
         # retrieving states = recording
-        self.recordings = torch.zeros((nsteps, inputs.shape[1], self.rec_nsites)).to('cuda')
+        self.recordings = torch.zeros((nsteps, inputs.shape[1], self.ndevsites), device=self.hwdev)
         for step_i, rec in enumerate(self.recordings_i):  # recordings should be nsteps long
             for layer, layer_rec in rec.items():
                 batch_i, site_i, rec_i = layer_rec
@@ -124,8 +122,9 @@ class NeuronalModel:
 
 
 if __name__ == '__main__':
+    hwdev = 'cuda'
     input_dim = (3, 64, 64)
-    neur = NeuronalModel(input_dim)
+    neur = NeuronalModel(input_dim, hwdev)
     Gndi = {s: i for i, s in enumerate(np.cumsum([d[0] * d[1] - 1 for _, d in neur.layer_dims.items()]))}
     neur.build(Gndi)  # ({'V1': 0, 'V2': 1, 'V4': 2, 'IT': 3})
 
@@ -134,8 +133,8 @@ if __name__ == '__main__':
     nsites = 3
 
     sites = torch.zeros((nsteps, batch_size, nsites), dtype=int).numpy()
-    signals = torch.zeros((nsteps, batch_size, nsites)).to('cuda') + 4
-    inputs = torch.zeros((nsteps, batch_size) + input_dim).to('cuda')
+    signals = torch.zeros((nsteps, batch_size, nsites)).to(hwdev) + 4
+    inputs = torch.zeros((nsteps, batch_size) + input_dim).to(hwdev)
 
     neur.record(Gndi, sites)
     neur.stim(Gndi, sites, signals)
