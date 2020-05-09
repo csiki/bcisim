@@ -220,7 +220,7 @@
 											"top": 186,
 											"width": 263,
 											"height": 13,
-											"text": "+record(Ar, nsteps)",
+											"text": "+record(Ar)",
 											"horizontalAlignment": 0
 										},
 										{
@@ -237,7 +237,7 @@
 											"top": 201,
 											"width": 263,
 											"height": 13,
-											"text": "+stim(As, nsteps)",
+											"text": "+stim(As)",
 											"horizontalAlignment": 0
 										},
 										{
@@ -1053,7 +1053,7 @@
 											"top": 404,
 											"width": 271,
 											"height": 13,
-											"text": "+build(Gndi): Gndi",
+											"text": "+build(Gnd): Gndi",
 											"horizontalAlignment": 0
 										},
 										{
@@ -1070,7 +1070,7 @@
 											"top": 419,
 											"width": 271,
 											"height": 13,
-											"text": "+record(Gndi, sites)",
+											"text": "+record(sites)",
 											"horizontalAlignment": 0
 										},
 										{
@@ -1087,7 +1087,7 @@
 											"top": 434,
 											"width": 271,
 											"height": 13,
-											"text": "+stim(Gndi, sites, signals)",
+											"text": "+stim(sites, signals)",
 											"horizontalAlignment": 0
 										},
 										{
@@ -2554,17 +2554,7 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+mgQxiITvA="
 									},
-									"name": "Ar",
-									"type": ""
-								},
-								{
-									"_type": "UMLParameter",
-									"_id": "AAAAAAFwUBDm1ibG9XY=",
-									"_parent": {
-										"$ref": "AAAAAAFwT+mgQxiITvA="
-									},
-									"name": "nsteps",
-									"type": ""
+									"name": "Ar"
 								}
 							]
 						},
@@ -2582,17 +2572,7 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+m/oxjZADw="
 									},
-									"name": "As",
-									"type": ""
-								},
-								{
-									"_type": "UMLParameter",
-									"_id": "AAAAAAFwVmx6GRvrr+w=",
-									"_parent": {
-										"$ref": "AAAAAAFwT+m/oxjZADw="
-									},
-									"name": "nsteps",
-									"type": ""
+									"name": "As"
 								}
 							]
 						},
@@ -2926,8 +2906,7 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT/uuOyRC5ug="
 									},
-									"name": "Gndi",
-									"type": ""
+									"name": "Gnd"
 								},
 								{
 									"_type": "UMLParameter",
@@ -2954,14 +2933,6 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+Pw+RY1olY="
 									},
-									"name": "Gndi"
-								},
-								{
-									"_type": "UMLParameter",
-									"_id": "AAAAAAFwUBo5fynSQo4=",
-									"_parent": {
-										"$ref": "AAAAAAFwT+Pw+RY1olY="
-									},
 									"name": "sites"
 								}
 							]
@@ -2980,19 +2951,11 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+RsFhaGVNg="
 									},
-									"name": "Gndi"
-								},
-								{
-									"_type": "UMLParameter",
-									"_id": "AAAAAAFwVpwgMyil0zI=",
-									"_parent": {
-										"$ref": "AAAAAAFwT+RsFhaGVNg="
-									},
 									"name": "sites"
 								},
 								{
 									"_type": "UMLParameter",
-									"_id": "AAAAAAFwVpwgMyim0CE=",
+									"_id": "AAAAAAFwVpwgMyil0zI=",
 									"_parent": {
 										"$ref": "AAAAAAFwT+RsFhaGVNg="
 									},
@@ -3014,7 +2977,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+PGOBWSzpg="
 									},
-									"name": "inputs"
+									"name": "inputs",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -3022,7 +2986,8 @@
 									"_parent": {
 										"$ref": "AAAAAAFwT+PGOBWSzpg="
 									},
-									"name": "nsteps"
+									"name": "nsteps",
+									"type": ""
 								},
 								{
 									"_type": "UMLParameter",
@@ -5761,7 +5726,7 @@
 												"$ref": "AAAAAAFwVpdiTicn114="
 											},
 											"edgePosition": 1,
-											"text": "4 : record(Gndi, sites, nsteps)"
+											"text": "4 : record(Gndi, sites)"
 										},
 										{
 											"_type": "EdgeLabelView",
@@ -5973,9 +5938,9 @@
 												"$ref": "AAAAAAFwVqHTOywzFFs="
 											},
 											"font": "Arial;13;0",
-											"left": 801,
+											"left": 798,
 											"top": 249,
-											"width": 153.15625,
+											"width": 159.65625,
 											"height": 13,
 											"alpha": 1.5707963267948966,
 											"distance": 10,
@@ -5983,7 +5948,7 @@
 												"$ref": "AAAAAAFwVqHTOyw0LgA="
 											},
 											"edgePosition": 1,
-											"text": "6 : stim(Gndi, sites, signal)"
+											"text": "6 : stim(Gndi, sites, signals)"
 										},
 										{
 											"_type": "EdgeLabelView",
@@ -6094,7 +6059,7 @@
 												"$ref": "AAAAAAFwVqKGxyxkgng="
 											},
 											"edgePosition": 1,
-											"text": "7 : sim(sites, signal, nsteps)"
+											"text": "7 : sim(inputs, nsteps)"
 										},
 										{
 											"_type": "EdgeLabelView",

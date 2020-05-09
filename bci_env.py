@@ -1,9 +1,11 @@
 import gym
 import random
+from neuronal_model import NeuronalModel
+from device import Device
 
 
 class BCIEnv(gym.Env):
-    def __init__(self, neur, dev):
+    def __init__(self, neur: NeuronalModel, dev: Device):
         self.neur = neur
         self.dev = dev
 
@@ -20,5 +22,5 @@ class BCIEnv(gym.Env):
         random.seed(seed)
 
     @classmethod
-    def placement(cls, Gn, Gd, T, k):
+    def placement(cls, Gn, Gd, T, k):  # in 3D
         pass
