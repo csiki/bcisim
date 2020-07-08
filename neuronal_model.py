@@ -25,11 +25,14 @@ class NeuronalModel:
 
         # build mapping between neuron indices and their corresponding sites in the biological model
         self.site_mapping = []
-        self.layer_dims = OrderedDict([('V1', (64, input_dim[1] // 4, input_dim[2] // 4)), ('V2', (128, input_dim[1] // 8, input_dim[2] // 8)),
-                                       ('V4', (256, input_dim[1] // 16, input_dim[2] // 16)), ('IT', (512, input_dim[1] // 32, input_dim[2] // 32))])
+        self.layer_dims = OrderedDict([('V1', (64, input_dim[1] // 4, input_dim[2] // 4)),
+                                       ('V2', (128, input_dim[1] // 8, input_dim[2] // 8)),
+                                       ('V4', (256, input_dim[1] // 16, input_dim[2] // 16)),
+                                       ('IT', (512, input_dim[1] // 32, input_dim[2] // 32))])
         for layer in self.layers:
             nchan, height, width = self.layer_dims[layer]
-            self.site_mapping.extend([(layer, (c, h, w)) for c in range(nchan) for h in range(height) for w in range(width)])
+            self.site_mapping.extend([(layer, (c, h, w)) for c in range(nchan)
+                                      for h in range(height) for w in range(width)])
 
         self.Gd = {s: i for i, s in enumerate(self.site_mapping)}  # inverse of self.site_mapping
         self.site_mapping = np.array([[m[0], np.array(m[1])] for m in self.site_mapping])  # gives faster slicing

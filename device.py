@@ -3,6 +3,11 @@ from neuronal_model import NeuronalModel
 from typing import Union, Tuple
 import torch
 
+# TODO define a class for Gd/Gnd/Gndi to store connections;
+#   store whether it's a read/write only connection, etc.
+#   graph representations, or just distances between dev and neur sites;
+#   many-to-many connections between dev and neur sites
+
 
 # recording: device gets binary array of length = #recording sites
 #   binary array is converted to indices, which are then mapped to neuronal model indices
@@ -14,14 +19,21 @@ class Device:
     def __init__(self, neur: NeuronalModel, hwdev):
         self.neur = neur
         self.hwdev = hwdev  # torch device
-        self.Gd = None  # should be initialized here if the device have a particular geometry
+
+        # should be initialized in the subclass or in the experiment externally
+        self.Gd = None
+        self.nrec, nstim = 0, 0  # TODO incorporate these below
+        self.action_space = None
+        self.observation_space = None
+
         self.Gndi = None
         self.dev2neur, self.dev2neur_vec = None, None
         self.active_devsites, self.available_neursites = None, None
         self.Ar = None
 
     def implant(self, Gnd: dict):
-        # Gnd is neur->dev connection graph or dictionary (dict implemented for now)
+        # Gnd is neur->dev connection graph or dictionary TODO dict implemented for now
+        # Gnd may contain info whether the device site is read/write only or hybrid TODO hybrid implemented for now
         self.Gndi = self.neur.build(Gnd)
 
         # build a reverse Gndi; active_devsites[i] corresponds to available_neursites[i]
