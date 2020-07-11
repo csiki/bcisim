@@ -46,6 +46,7 @@ class BCIEnv(gym.Env):
         random.seed(seed)
 
     def _get_reward(self, rec_activity: Tuple[torch.Tensor, torch.Tensor]):
+        # TODO add option for state prediction
         # simple inverse of the distance between the desired and actual output state of the neural model
         if self.goal_output_state is None:
             raise ValueError('For the base BCIEnv implementation, a goal state is required!')
