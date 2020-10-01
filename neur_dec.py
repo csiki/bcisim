@@ -1,6 +1,7 @@
 import os, sys
 from typing import List
 import copy
+from queue import Queue
 
 import torch
 from torch.nn import Module
@@ -49,6 +50,9 @@ class NeurDec(Module):
     def reset(self):
         self.h.x = torch.zeros_like(self.h.x).to(self.device)
 
+    def detach(self):
+        self.h.x.detach_()
+
     def forward(self, g):
         x, edge_index = g.x, g.edge_index
         x = self.gnn_x(x, edge_index)
@@ -59,11 +63,13 @@ class NeurDec(Module):
         return [branch(self.h) for branch in self.branches]
 
 
-def main():
+def test_net():
+
+    torch.autograd.set_detect_anomaly(True)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # gen seq of graphs
-    seq_len = 32
+    seq_len = 256
     edge_index = torch.tensor([[0, 1, 1, 2],
                                [1, 0, 2, 1]], dtype=torch.long).to(device)
     x = torch.tensor([[1], [0], [1]], dtype=torch.float)
@@ -78,6 +84,7 @@ def main():
         g_seq.append(g)
     g_seq[-1].y = shift(g.x)
     g_seq = [g.to(device) for g in g_seq]
+    print('data generated')
 
     # init network
     h_chan = 4
@@ -89,15 +96,32 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-3)
 
     # train net
-    # TODO implement truncated BPTT: https://discuss.pytorch.org/t/truncated-backprop-data-clarification/34854/2
+    k1 = k2 = 4
+    nepoch = 10
     model.train()
-    for epoch in range(50):
-        optimizer.zero_grad()
-        preds = torch.stack([model(g_seq[s])[0] for s in range(seq_len)])
-        loss = F.binary_cross_entropy(preds, torch.stack([g_seq[s].y for s in range(seq_len)]))
-        loss.backward()
-        optimizer.step()
+    for epoch in range(nepoch):
+
+        preds, targets = [], []
+        for s in range(seq_len):
+            pred = model(g_seq[s])[0]
+            target = g_seq[s].y
+
+            preds.append(pred)
+            targets.append(target)
+
+            # TBPTT
+            if (s + 1) % k1 == 0:
+                optimizer.zero_grad()
+                loss = F.binary_cross_entropy(torch.stack(preds), torch.stack(targets))
+                loss.backward(retain_graph=False)
+                optimizer.step()
+                model.detach()  # detach hidden state to cut backprop-graph
+
+                preds.clear()
+                targets.clear()
+
         model.reset()
+        print(f'epoch {epoch + 1}/{nepoch}')
 
     # test
     model.eval()
@@ -108,4 +132,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    test_net()
