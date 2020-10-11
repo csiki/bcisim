@@ -1,8 +1,3 @@
-# just saved here
-# it needs to be copied under code/ dir of the "massively parallel recordings in macaque..." paper's data repo
-# and it only runs in py2.7
-# saves the spiking and behavioral data into pickle for easy access
-
 import load_local_neo_odml_elephant
 
 import os, sys
@@ -164,7 +159,8 @@ for i, cut_seg in enumerate(cut_segments):
 
 content = {'spike_trains': spike_trains, 'spike_meta': spike_meta,
            'analog_signals': analog_signals, 'analog_meta': analog_meta,
-           'events': events, 'event_meta': event_meta}
+           'events': events, 'event_meta': event_meta,
+           'blackrock_elid_list': bl.annotations['avail_electrode_ids']}
 
 with open('{}.pckl'.format(monkey), mode='wb') as f:
     pickle.dump(content, f, protocol=2)

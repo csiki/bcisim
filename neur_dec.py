@@ -8,8 +8,8 @@ from torch.nn import Module
 import torch.nn.functional as F
 from torch_geometric.data import Data as Graph
 from torch_geometric.nn import GATConv, NNConv
-import numpy as np
-import matplotlib.pyplot as plt
+# import numpy as np
+# import matplotlib.pyplot as plt
 
 
 class InferBranch(Module):

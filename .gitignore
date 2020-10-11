@@ -2,4 +2,4 @@
 __pycache__
 neur/resources/
 data/
-
+experiments/monkey_grasp/*.pckl
