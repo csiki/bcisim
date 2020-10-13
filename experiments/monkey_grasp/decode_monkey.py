@@ -1,6 +1,8 @@
 import numpy as np
+from scipy.signal import upfirdn
 import matplotlib.pyplot as plt
 import os, sys
+import re
 import copy
 import pickle
 import torch
@@ -41,10 +43,15 @@ def plot_graph(g: Graph):
 
 class MonkeyDataGen:
 
-    def __init__(self, monkey: dict, chan_conn: np.ndarray):
+    def __init__(self, monkey: dict, chan_conn: np.ndarray, fs:int):
         self.ntrials = len(monkey[b'spike_trains'])
         self.nunits = len(monkey[b'spike_trains'][0])
-        self.spikes = monkey[b'spike_trains']
+        self.spikes = [[chan.astype(int) for chan in trial] for trial in monkey[b'spike_trains']]  # 30 kHz; to int
+
+        self.analog = monkey[b'analog_signals']  # 1 kHz
+        an_chan_ids = [an_meta[b'channel_id'] for an_meta in monkey[b'analog_meta'][8]]
+        self.an_load_force_i = an_chan_ids.index(141) if 141 in an_chan_ids else None  # pulling force
+        self.an_displ_i = an_chan_ids.index(143) if 143 in an_chan_ids else None  # object displacement
 
         # assume that the spike meta data, and thus the ordering of electrodes in spike trains is the same across trials
         self.spike_meta = monkey[b'spike_meta'][0]
@@ -57,6 +64,25 @@ class MonkeyDataGen:
 
         self.graph_zero = self.build_template_graph(chan_conn, node_dim=1)
         # plot_graph(self.graph_zero)
+
+        # resample spikes and analog signals
+        spike_fs, analog_fs = 30000, 1000
+        if fs != spike_fs:  # need to resample spikes
+            # multiply spike timestamps by the ratio of old and new sampling freqs, then remove timestamp duplicates
+            fs_ratio = fs / spike_fs
+            for trial in monkey[b'spike_trains']:
+                for chan_i, chan in enumerate(trial):
+                    trial[chan_i] = np.unique(chan * fs_ratio)  # timestamps should be ordered anyways
+
+        if fs > analog_fs:  # upsample analog
+            fs_ratio = fs // analog_fs
+            for trial in self.analog:
+                for chan_i, chan in enumerate(trial):
+                    trial[chan_i] = upfirdn([.5, 1, .5], chan, up=fs_ratio, mode='edge')  # linear upsampling
+        elif fs < analog_fs:
+            raise NotImplemented(f'why would even want to go below {analog_fs} Hz?!')
+
+        # TODO support events
 
     def build_template_graph(self, chan_conn: np.ndarray, node_dim):
         # template graph: derive connectivity of channels,
@@ -117,16 +143,76 @@ class MonkeyDataGen:
 
         return Graph(x=torch.zeros((self.nunits, node_dim)), edge_index=edges, pos=pos)
 
-    def vec_trial_gen(self, trial_i: int):
-        step = 0
-        unit_t = np.zeros(self.nunits)  # time anchor for each unit so unit_t[u] <= step
-        pass  # TODO same as graph but outputs binary vectors
+    def vec_trial_gen(self, trial_i: int, field_names: list):
+        # yields spiking data as binary vectors
+        unit_t = np.zeros(self.nunits)  # time anchor for each unit so unit_t[u] <= step at all times
+        spikes_trial = self.spikes[trial_i]
+        analog_trial = self.analog[trial_i]
 
-    def graph_trial_gen(self, trial_i: int):
+        # append -1 to the end of spikes so we know where the end is
+        if len(spikes_trial[0]) == 0 or spikes_trial[0][0] != -1:
+            for chan_i, chan in enumerate(spikes_trial):
+                spikes_trial[chan_i] = np.concatenate([chan, [-1]])
+
+        # decode field list, catch fields like spike_t+X, force_t+X
+        spikes_re = re.compile(r'spikes_t\+{0,9}')
+        forces_re = re.compile(r'forces_t\+{0,9}')
+        field_spikes_i = field_names.index('spikes_t')  # mandatory field
+        field_forces_i = field_names.index('forces_t')  # mandatory field
+        fields_future_spikes = [(int(f[f.index('_t') + 3:]), f_i)
+                                for f_i, f in enumerate(field_names) if spikes_re.match(f)]
+        fields_future_spikes = sorted(fields_future_spikes)  # faster to retrieve future spikes if deltas are in order
+        fields_future_forces = [(int(f[f.index('_t') + 3:]), f_i)
+                                for f_i, f in enumerate(field_names) if forces_re.match(f)]
+
+        # stop when out of analog signals; if future fields, then stop sooner
+        nstep = len(analog_trial[0]) - max([fut for fut, f_i in fields_future_spikes + fields_future_forces])
+        for step in range(nstep):
+            res = [None] * (2 + len(fields_future_spikes) + len(fields_future_forces))  # assembled fields to return
+
+            # retrieve spikes of this timestep
+            spikes_vec, unit_t = self._get_next_spikes_vec(spikes_trial, unit_t, step)
+
+            # assign current spikes and force
+            res[field_spikes_i] = spikes_vec
+            res[field_forces_i] = analog_trial[self.an_load_force_i][step]
+
+            # retrieve future spikes
+            fut_step = step + 1  # already stepped one forward with unit_t
+            fut_unit_t = unit_t.copy()  # copy so no prob w/ temporarily overwriting it
+            for delta, f_i in fields_future_spikes:
+                target_step = step + delta
+                for _ in range(target_step - fut_step):  # take some steps up to target
+                    _, fut_unit_t = self._get_next_spikes_vec(spikes_trial, fut_unit_t, fut_step)
+                    fut_step += 1
+
+                fut_spikes_vec, fut_unit_t = self._get_next_spikes_vec(spikes_trial, fut_unit_t, fut_step)
+                res[f_i] = fut_spikes_vec  # and now the loop can continue on w/ fut_step and fut_unit_t being updated
+
+            # retrieve future analog signals
+            for delta, f_i in fields_future_forces:
+                res[f_i] = analog_trial[self.an_load_force_i][step + delta]
+
+            yield res  # TODO test this whole generator
+
+    def _get_next_spikes_vec(self, spikes_trial: list, unit_t: np.ndarray, step: int):
+        # retrieve spike times indexed by unit_t and set spike to 1 if the time is the current time (step)
+        # overwrites unit_t
+        spikes_t_vec = np.array([chan[unit_t[chan_i]] for chan_i, chan in enumerate(spikes_trial)])
+        valid_spikes = spikes_t_vec == step
+
+        spikes_vec = np.zeros(self.nunits)
+        spikes_vec[valid_spikes] = 1
+        unit_t[valid_spikes] += 1  # increment timestamp anchor
+
+        return spikes_vec, unit_t
+
+
+    def graph_trial_gen(self, trial_i: int, field_names: list):
         # TODO call vec_trial_gen and convert vectors to graphs and return that, easy
         pass
 
-    def build_graph(self, spikes):
+    def build_graph(self, spike_data: list):
         pass
 
 
@@ -143,3 +229,4 @@ four_neighbor = np.array([
     [0, 1, 0],
 ], dtype=int)
 gen = MonkeyDataGen(monkey, four_neighbor)
+print(len(gen.spikes), len(gen.spikes[0]))
