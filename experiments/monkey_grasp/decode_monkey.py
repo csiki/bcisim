@@ -6,11 +6,13 @@ import re
 import copy
 import pickle
 import torch
-from torch.nn import Module
+from torch.nn import Module, LSTM, Sequential, Linear, MSELoss
 import torch.nn.functional as F
 from torch_geometric.data import Data as Graph
 from torch_geometric.utils.convert import to_networkx
 import networkx as nx
+from sklearn.base import BaseEstimator
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 from neur_dec import NeurDec
 
@@ -43,15 +45,25 @@ def plot_graph(g: Graph):
 
 class MonkeyDataGen:
 
-    def __init__(self, monkey: dict, chan_conn: np.ndarray, fs: int):
+    def __init__(self, monkey: dict, chan_conn: np.ndarray, fs: int, analog_scaler_t=StandardScaler):
         self.ntrials = len(monkey[b'spike_trains'])
         self.nunits = len(monkey[b'spike_trains'][0])
         self.spikes = [[chan.astype(int) for chan in trial] for trial in monkey[b'spike_trains']]  # 30 kHz; to int
 
         self.analog = monkey[b'analog_signals']  # 1 kHz
-        an_chan_ids = [an_meta[b'channel_id'] for an_meta in monkey[b'analog_meta'][8]]
+        an_chan_ids = [an_meta[b'channel_id'] for an_meta in monkey[b'analog_meta'][0]]
         self.an_load_force_i = an_chan_ids.index(141) if 141 in an_chan_ids else None  # pulling force
         self.an_displ_i = an_chan_ids.index(143) if 143 in an_chan_ids else None  # object displacement
+
+        # scale analog signal
+        if analog_scaler_t is not None and self.an_load_force_i is not None and self.an_displ_i is not None:
+            analog_scalers = [None] * len(an_chan_ids)  # for each analog signal separate scaler
+            # not gonna cook up a general case here w/ a possibility of hundreds of analog signals when there's only 2
+            for an_i in [self.an_load_force_i, self.an_displ_i]:
+                vals = np.concatenate([trial[an_i] for trial in self.analog])
+                analog_scalers[an_i] = analog_scaler_t().fit(vals)
+            self.analog = [[analog_scalers[chan_i].transform(chan) for chan_i, chan in enumerate(trial)]
+                           for trial in self.analog]
 
         # assume that the spike meta data, and thus the ordering of electrodes in spike trains is the same across trials
         self.spike_meta = monkey[b'spike_meta'][0]
@@ -210,7 +222,9 @@ class MonkeyDataGen:
             for delta, f_i in fields_future_forces:
                 res[f_i] = analog_trial[self.an_load_force_i][step + delta]
 
-            yield res  # TODO test this whole generator
+            yield res
+
+        return [None] * (2 + len(fields_future_spikes) + len(fields_future_forces))  # all Nones at the end
 
     def _get_next_spikes_vec(self, spikes_trial: list, unit_t: np.ndarray, step: int):
         # retrieve spike times indexed by unit_t and set spike to 1 if the time is the current time (step)
@@ -231,6 +245,80 @@ class MonkeyDataGen:
     def build_graph(self, spike_data: list):
         # TODO call in graph_trial_gen
         pass
+
+
+class SimpleLSTM(Module):
+    def __init__(self, input_dim: int, hidden_dim: int, out_dim: int, num_layers: int):
+        super().__init__()
+        self.lstm = LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=num_layers,
+                         batch_first=True, dropout=.3)
+        self.lin = Linear(hidden_dim, out_dim)
+
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.h, self.c = None, None
+
+    def init_hidden(self, batch_size: int):
+        dev = next(self.parameters()).device
+        return (torch.rand((self.num_layers, batch_size, self.hidden_dim), device=dev),
+               torch.randn((self.num_layers, batch_size, self.hidden_dim), device=dev))
+
+    def forward(self, x):
+        x, (self.h, self.c) = self.lstm(x, (self.h, self.c))
+        return self.lin(x)
+
+    def tbptt_train(self, trial_gens, loss_fun, optimizer, k: int):
+        self.train()
+        dev = next(self.parameters()).device
+        ntrials = len(trial_gens)  # same as batch size now
+        self.h, self.c = self.init_hidden(batch_size=ntrials)
+
+        out_of_seq = False
+        losses = []
+        while not out_of_seq:
+            batch_x, batch_y = [], []
+            try:
+                for trial_gen in trial_gens:
+                    seq = [next(trial_gen) for _ in range(k)]
+                    batch_x.append([x for x, y in seq])
+                    batch_y.append([y for x, y in seq])
+
+                batch_x = torch.tensor(batch_x, dtype=torch.float32, device=dev)  # ntrial x k x feat,
+                batch_y = torch.tensor(batch_y, dtype=torch.float32, device=dev)  # where ntrial == batch
+
+                # actual training
+                self.zero_grad()
+                self.h.detach_()
+                self.c.detach_()
+                self.h, self.c = self.h.detach(), self.c.detach()
+                y_pred = self.forward(batch_x)
+                loss = loss_fun(y_pred, batch_y)
+                loss.backward()
+                optimizer.step()
+                losses.append(loss.detach().cpu())
+
+            except (RuntimeError, StopIteration):
+                print('k is off', file=sys.stderr)  # TODO handle when trial_len % k != 0 for all trials
+                break
+
+        return np.mean(losses)
+
+    def test(self, trial_gens, loss_fun):
+        dev = next(self.parameters()).device
+        with torch.no_grad():
+            self.eval()
+            self.h, self.c = self.init_hidden(batch_size=1)  # testing each trial separately, no batching
+            losses = []
+            for trial_gen in trial_gens:
+                samples = [sample for sample in trial_gen]
+                x = torch.tensor([sample[0] for sample in samples], dtype=torch.float32, device=dev)
+                y = torch.tensor([sample[1] for sample in samples], dtype=torch.float32, device=dev)
+                x, y = torch.unsqueeze(x, 0), torch.unsqueeze(y, 0)  # add batch dim
+                y_pred = self(x)
+                losses.append(loss_fun(y_pred, y).cpu())
+
+            return losses
 
 
 if __name__ == '__main__':
@@ -255,23 +343,25 @@ if __name__ == '__main__':
     fields = ['spikes_t', 'forces_t']
 
     trial_indices = np.random.permutation(gen.ntrials)
-    train_trials = set(trial_indices[:int(gen.ntrials * train_ratio)])
-    test_trials = set(trial_indices[len(train_trials):])
+    train_trials = trial_indices[:int(gen.ntrials * train_ratio)]
+    test_trials = trial_indices[len(train_trials):]
 
-    train_spikes, train_forces = [], []
-    test_spikes, test_forces = [], []
-    for trial_i in trial_indices:
-        for i, s in enumerate(gen.vec_trial_gen(trial_i, fields)):
-            if trial_i in train_trials:
-                train_spikes.append(s[0])
-                train_forces.append(s[1])
-            else:
-                test_spikes.append(s[0])
-                test_forces.append(s[1])
-    train_spikes, train_forces = np.array(train_spikes), np.array(train_forces)
-    test_spikes, test_forces = np.array(test_spikes), np.array(test_forces)
-    print('train', train_spikes.shape, train_forces.shape)
-    print('test', test_spikes.shape, test_forces.shape)
+    # data gen
+    # train_spikes, train_forces = [], []
+    # test_spikes, test_forces = [], []
+    #
+    # for trial_i in trial_indices:
+    #     for i, s in enumerate(gen.vec_trial_gen(trial_i, fields)):
+    #         if trial_i in train_trials:  # linear search but whatever, see below data gen for RNNs
+    #             train_spikes.append(s[0])
+    #             train_forces.append(s[1])
+    #         else:
+    #             test_spikes.append(s[0])
+    #             test_forces.append(s[1])
+    # train_spikes, train_forces = np.array(train_spikes), np.array(train_forces)
+    # test_spikes, test_forces = np.array(test_spikes), np.array(test_forces)
+    # print('train', train_spikes.shape, train_forces.shape)
+    # print('test', test_spikes.shape, test_forces.shape)
 
     # # train linear regression - shit
     # from sklearn.linear_model import LinearRegression
@@ -295,8 +385,49 @@ if __name__ == '__main__':
     # test_score = model.score(test_spikes, test_forces.ravel())
     # print('simple NN train score', train_score, 'test score', test_score)
 
-    # TODO kalman filter
-    from pykalman import KalmanFilter, UnscentedKalmanFilter
-    model = KalmanFilter(n_dim_state=train_forces.shape[-1], n_dim_obs=train_spikes.shape[-1])
-    model.em(train_spikes, train_forces, n_iter=10)
-    smoothed_state_means, smoothed_state_covariances = model.smooth(test_spikes)
+    # TODO Kalman filter: neural state is observed (y), and the force is hidden (x)
+    # from pykalman import KalmanFilter, UnscentedKalmanFilter
+    # model = KalmanFilter(n_dim_state=train_forces.shape[-1], n_dim_obs=train_spikes.shape[-1])
+    # model.em(train_spikes, train_forces, n_iter=10)
+
+    # RNN
+    k = 64
+    nepoch = 200
+    dev = 'cuda'  # cuda | cpu
+
+    hidden_dim = 32
+    num_layers = 2
+    model = SimpleLSTM(gen.nunits, hidden_dim=hidden_dim, out_dim=1, num_layers=num_layers).to(dev)
+    optimizer = torch.optim.Adam(model.parameters(), lr=.001)
+    loss_fun = MSELoss()
+
+    print(f'epochs: {nepoch}, k:{k}, dev: {dev}, hidden: {hidden_dim}, num layers: {num_layers}')
+
+    train_losses = []
+    test_trial_losses = []
+    for epoch in range(nepoch):
+        train_trial_gens = [gen.vec_trial_gen(trial_i, fields) for trial_i in train_trials]
+        test_trial_gens = [gen.vec_trial_gen(trial_i, fields) for trial_i in test_trials]
+
+        train_loss = model.tbptt_train(train_trial_gens, loss_fun, optimizer, k=64)
+        train_losses.append(train_loss)
+        test_losses = model.test(test_trial_gens, loss_fun)
+        test_trial_losses.append(test_losses)
+        print(f'{epoch}/{nepoch} losses', np.mean(test_losses), ':', [float(l) for l in test_losses])
+
+    # plot RNN losses
+    plt.figure()
+    plt.plot(train_losses, label='train loss', color='gray')
+    for trial_i in range(len(test_trial_losses[0])):
+        plt.plot(np.arange(nepoch), [l[trial_i] for l in test_trial_losses], label=f'trial #{test_trials[trial_i]}')
+
+    plt.xlabel('epoch')
+    plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
+    plt.tight_layout()
+    plt.title(f'RNN k={k}, epoch={nepoch}, hidden={hidden_dim}, num layers: {num_layers}')
+    plt.show()
+
+    # save model
+    model_path = f'experiments/monkey_grasp/rnn_mode_{nepoch}_{k}_{num_layers}_{hidden_dim}.pth'
+    torch.save({'epoch': nepoch, 'model_state_dict': model.state_dict(), 'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': np.mean(train_losses), 'test_loss': np.mean(test_trial_losses)}, model_path)

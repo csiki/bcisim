@@ -63,6 +63,27 @@ class NeurDec(Module):
         return [branch(self.h) for branch in self.branches]
 
 
+# def tbptt(model, x_seq, y_seq, loss, k):
+#     preds, targets = [], []
+#     for s in range(x_seq.shape[0]):
+#         pred = model(g_seq[s])[0]
+#         target = g_seq[s].y
+#
+#         preds.append(pred)
+#         targets.append(target)
+#
+#         # TBPTT
+#         if (s + 1) % k1 == 0:
+#             optimizer.zero_grad()
+#             loss = F.binary_cross_entropy(torch.stack(preds), torch.stack(targets))
+#             loss.backward(retain_graph=False)
+#             optimizer.step()
+#             model.detach()  # detach hidden state to cut backprop-graph
+#
+#             preds.clear()
+#             targets.clear()
+
+
 def test_net():
 
     torch.autograd.set_detect_anomaly(True)
