@@ -4,3 +4,5 @@ neur/resources/
 data/
 experiments/monkey_grasp/*.pckl
 *.pth
+experiments/*/models/
+experiments/*/results/
