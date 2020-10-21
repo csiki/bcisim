@@ -74,6 +74,13 @@ class MonkeyDataGen:
         self.graph_zero = self.build_template_graph(chan_conn, node_dim=1)
         # plot_graph(self.graph_zero)
 
+        # grid mapper: maps grid positions to boolean arrays indexing the units vector; 10 x 10 x nunits tensor
+        # if the mapper is matrix multiplied with a vector of binary spikes len nunits, it returns the grid activation
+        self.grid_mapper = np.zeros((10, 10, self.nunits), dtype=np.float32)
+        for i in range(10):
+            for j in range(10):
+                self.grid_mapper[i, j] = self.grid[i, j] == self.chan_ids
+
         # count overall number of spikes to see how much we lose after down/upsampling
         nspikes_total = sum([len(chan) for trial in self.spikes for chan in trial])
 
@@ -98,8 +105,7 @@ class MonkeyDataGen:
                     trial[chan_i] = upfirdn(up_kernel, chan.ravel(), up=fs_ratio, mode='edge').reshape((-1, 1))
 
         elif fs < analog_fs:
-            pass
-            # raise NotImplemented(f'why would even want to go below {analog_fs} Hz?!')
+            raise NotImplemented(f'if you want to go below {analog_fs} Hz, then implement it big boy')
 
         # TODO support events
 
@@ -240,12 +246,8 @@ class MonkeyDataGen:
                     res[fi] = self._build_grid(res[fi], unit_aggr)
             yield res
 
-    def _build_grid(self, spike_vec: np.ndarray, unit_aggr: Callable):  # unit_aggr may be mean, max, etc.
-        res_grid = np.zeros((10, 10), dtype=np.float32)
-        for i in range(10):
-            for j in range(10):
-                res_grid[i, j] = unit_aggr(spike_vec[self.grid[i, j] == self.chan_ids])
-        return res_grid
+    def _build_grid(self, spike_vec: np.ndarray, unit_aggr: Callable):  # unit_aggr may be np.clip
+        return unit_aggr(np.matmul(self.grid_mapper, spike_vec))  # isn't this a beauty?
 
     def gen_graph_trial(self, trial_i: int, field_names: list):
         # TODO call vec_trial_gen and convert vectors to graphs and return that, easy

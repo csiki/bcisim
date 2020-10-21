@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import os, sys
 import pickle
 import torch
-from torch.nn import Module, LSTM, Sequential, Linear, MSELoss
+from torch.nn import Module, LSTM, Sequential, Linear, MSELoss, Conv2d, Flatten
+from collections import OrderedDict
 
 from neur_dec import NeurDec
 from experiments.monkey_grasp.monkey_gen import *
@@ -80,24 +81,37 @@ if __name__ == '__main__':
     # model.em(train_spikes, train_forces, n_iter=10)
 
     # RNN
-    k = 32
-    nepoch = 50
+    k = 64
+    nepoch = 150
     dev = 'cuda'  # cuda | cpu
+    grid_conv = True
+    grid_unit_aggr_fun = lambda x: np.clip(x, 0, 1)
 
-    hidden_dim = 32
-    num_layers = 2
-    model = SimpleLSTM(gen.nunits, hidden_dim=hidden_dim, out_dim=1, num_layers=num_layers).to(dev)
-    optimizer = torch.optim.Adam(model.parameters(), lr=.001)
+    # conv embedding: 10x10 -> 1xN
+    grid_conv_chans = [8, 8, 8, 16]
+    grid_embedding = GridConv(grid_conv_chans)
+
+    hidden_dim = 16
+    num_layers = 1
+    model = SimpleLSTM(grid_conv_chans[-1] if grid_conv else gen.nunits, hidden_dim=hidden_dim, out_dim=1,
+                       num_layers=num_layers, embedding=grid_embedding if grid_conv else None).to(dev)
+    optimizer = torch.optim.Adam(model.parameters(), lr=.0005)
     loss_fun = MSELoss()
-    model_name = f'rnn_model_{nepoch}_{k}_{num_layers}_{hidden_dim}'
+    model_name = f'rnn_model_grid-{int(grid_conv)}_{"-".join([str(g) for g in grid_conv_chans]) if grid_conv else ""}' \
+                 f'_{nepoch}_{k}_{num_layers}_{hidden_dim}'
 
-    print(f'epochs: {nepoch}, k:{k}, dev: {dev}, hidden: {hidden_dim}, num layers: {num_layers}')
+    print(f'epochs: {nepoch}, grid: {grid_conv}, grid chans: {grid_conv_chans}, k: {k}, dev: {dev}, '
+          f'hidden: {hidden_dim}, num layers: {num_layers}')
 
     train_losses = []
     test_trial_losses = []
     for epoch in range(nepoch):
-        train_trial_gens = [gen.gen_vec_trial(trial_i, fields) for trial_i in train_trials]
-        test_trial_gens = [gen.gen_vec_trial(trial_i, fields) for trial_i in test_trials]
+        if grid_conv:
+            train_trial_gens = [gen.gen_grid_trial(trial_i, fields, grid_unit_aggr_fun) for trial_i in train_trials]
+            test_trial_gens = [gen.gen_grid_trial(trial_i, fields, grid_unit_aggr_fun) for trial_i in test_trials]
+        else:
+            train_trial_gens = [gen.gen_vec_trial(trial_i, fields) for trial_i in train_trials]
+            test_trial_gens = [gen.gen_vec_trial(trial_i, fields) for trial_i in test_trials]
 
         train_loss = model.tbptt_train(train_trial_gens, loss_fun, optimizer, k=64)
         train_losses.append(train_loss)
@@ -118,8 +132,8 @@ if __name__ == '__main__':
     plt.xlabel('epoch')
     leg = plt.legend(bbox_to_anchor=(1, 1), loc='upper left')
     plt.tight_layout()
-    plt.title(f'RNN train={np.mean(train_losses)}, test={np.mean(test_trial_losses)} k={k}, epoch={nepoch}, '
-              f'hidden={hidden_dim}, num layers: {num_layers}')
+    plt.title(f'RNN train={np.mean(train_losses)}, test={np.mean(test_trial_losses)}, k={k}, epoch={nepoch}, '
+              f'hidden={hidden_dim}, num layers: {num_layers}, grid: {grid_conv}')
     plt.savefig(f'results/{model_name}.png', bbox_extra_artists=(leg,), bbox_inches='tight')
 
     # save model
