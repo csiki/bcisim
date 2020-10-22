@@ -71,7 +71,7 @@ class MonkeyDataGen:
 
         # grid and graph stuff
         self.grid = blackrock_arraygrid(monkey[b'blackrock_elid_list'], set(self.chan_ids))
-        self.graph_zero = self.build_template_graph(chan_conn, node_dim=1)
+        self.graph_zero = self.build_template_graph(chan_conn, node_dim=1)  # 1 dim to contain binary spiking
         # plot_graph(self.graph_zero)
 
         # grid mapper: maps grid positions to boolean arrays indexing the units vector; 10 x 10 x nunits tensor
@@ -131,6 +131,8 @@ class MonkeyDataGen:
                     continue
 
                 uids = self.chan_map[cid]  # all indices of units for the given channel
+                # not the same as self.unit_ids; latter has the original ids, while chan_map maps to units from 0..144
+                # so uids are actual indices to the array of units and not the original identifiers coming w/ the data
 
                 # get channels (and thus units) to connect to according to chan_conn
                 #   sort of convolve chan_conn on grid
@@ -250,10 +252,16 @@ class MonkeyDataGen:
         return unit_aggr(np.matmul(self.grid_mapper, spike_vec))  # isn't this a beauty?
 
     def gen_graph_trial(self, trial_i: int, field_names: list):
-        # TODO call vec_trial_gen and convert vectors to graphs and return that, easy
-        pass
+        for res in self.gen_vec_trial(trial_i, field_names):
+            for fi, fname in enumerate(field_names):
+                if 'spikes' in fname:
+                    res[fi] = self._build_graph(res[fi])
+            yield res
 
     def _build_graph(self, spike_vec: np.ndarray):
-        # TODO call in graph_trial_gen
-        pass
+        # clone the template graph (containing the connectivity) then fill in the x values with spike_vec
+        # the ordering of graph nodes should be the same as the ordering of units, so this should work just fine
+        g = self.graph_zero.clone()
+        g.x[:] = torch.from_numpy(spike_vec.reshape(self.nunits, 1))  # if g is on gpu, it will stay there
+        return g
 
